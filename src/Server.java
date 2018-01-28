@@ -39,7 +39,7 @@ public class Server {
 
 		int port = 1337; 
 		if (args.length < 1) {
-			System.out.println("Using TCP port number=" + port);
+			System.out.println("Using TCP port number= " + port);
 		} else {
 			port = Integer.valueOf(args[0]).intValue();
 		}
@@ -117,7 +117,7 @@ class ChatThread extends Thread {
 
 		try {
 			inputStream = new DataInputStream(clientSocket.getInputStream()); //input Streams for client
-			inputLine = new BufferedReader(new InputStreamReader(System.in)); //read chat input on server
+			inputLine = new BufferedReader(new InputStreamReader(inputStream)); //read chat input on server
 			outputLine = new PrintStream(clientSocket.getOutputStream()); //output Streams for client
 			String name = null;
 			while (true && (name == null)) {
@@ -251,7 +251,7 @@ class ChatThread extends Thread {
 									byte[] buffer = new byte[1024];
 									int length;
 									while ((length = input.read(buffer)) > 0) {
-										output.write(buffer, 0, length); // Copy the bits from instream to outstream
+										output.write(buffer, 0, length); // Copy the bits from input stream to output stream
 									}
 									input.close();
 									output.close();

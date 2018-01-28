@@ -15,6 +15,7 @@ public class Client implements Runnable {
 	private static Socket clientSocket = null; // The client socket
 	private static PrintStream outputLine = null; // The output Line
 	private static BufferedReader inputLine = null; // The input Line
+	private static BufferedReader inputStreamLine = null; // The input Line
 	private static DataInputStream inputStream = null; // The input Stream
 	private static DataOutputStream outputStream = null; // The output Stream
 	private static boolean closed = false;
@@ -28,6 +29,7 @@ public class Client implements Runnable {
 	public static void main(String[] args) {
 		int port; 
 		String TimeStamp;
+//		String host = "localhost";
 		if (args.length == 0) { // check to see if the String array is empty
 			System.out.println("There were no commandline arguments passed!");
 			System.exit(0);
@@ -41,13 +43,18 @@ public class Client implements Runnable {
 	    }
 
 		try {
-			clientSocket = new Socket(name, port); // Open a socket on a given address and port.
+//		      /** Obtain an address object of the server */
+//		     InetAddress name = InetAddress.getByName(host);
+//		     port = PORT;
+//		      /** Establish a socket connetion */
+			 clientSocket = new Socket(name, port); // Open a socket on a given address and port.
 		     TimeStamp = new java.util.Date().toString();
 		     String process = "Calling the Socket Server on port " + port + " at " + TimeStamp +  (char) 13;
 		     System.out.println(process);  
 			inputLine = new BufferedReader(new InputStreamReader(System.in)); //read chat input on server
 			outputLine = new PrintStream(clientSocket.getOutputStream()); //print text output to user
 			inputStream = new DataInputStream(clientSocket.getInputStream()); //receive server data
+			inputStreamLine = new BufferedReader(new InputStreamReader(inputStream)); //read chat input on server
 			outputStream = new DataOutputStream(clientSocket.getOutputStream()); //send server data
 
 		} catch (IOException e) {
@@ -82,7 +89,7 @@ public class Client implements Runnable {
 	public void run() {
 		String responseLine;
 		try { 
-			while ((responseLine = inputLine.readLine()) != null) {
+			while ((responseLine = inputStreamLine.readLine()) != null) {
 
 				if (responseLine.equals("Enter name")) {
 					outputLine.println(name);
