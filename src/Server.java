@@ -1,9 +1,7 @@
-import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -26,8 +24,8 @@ public class Server {
 	 * each thread is assigned to run on an array position "specific core" 
 	 * though it will not enhance performance necessarily. Chat-Room\AWS server properties.PNG
 	 */
-	private static final int CoreSimulator = 4;
-	private static final ChatThread[] chatThreads = new ChatThread[CoreSimulator]; // currently 4 threads
+	private static final int CoreSimulator = 4; //pretend there is 4 cores
+	private static final ChatThread[] chatThreads = new ChatThread[CoreSimulator];
 
 	/**
 	 * main method for AWS threaded Server
@@ -37,8 +35,9 @@ public class Server {
 	public static void main(String args[]) {
 		String TimeStamp;
 
-		int port = 1337; 
+		int port = 2222; 
 		if (args.length < 1) {
+		      System.out.println("thread using new port");
 			System.out.println("Using TCP port number= " + port);
 		} else {
 			port = Integer.valueOf(args[0]).intValue();
@@ -46,30 +45,31 @@ public class Server {
 		try {
 			serverSocket = new ServerSocket(port); // Open a server socket on the portNumber
 		     TimeStamp = new java.util.Date().toString();
-		     String process = "opening Socket" + port + " at " + TimeStamp +  (char) 13;
+		     String process = "opening Socket " + port + " at " + TimeStamp +  (char) 13;
 		     System.out.println(process);  
 		} catch (IOException e) {
 			System.out.println(e); //need to select different port
 		     TimeStamp = new java.util.Date().toString();
-		     String process = "need to select different port than" + port + " error at " + TimeStamp +  (char) 13;
+		     String process = "need to select different port than " + port + " error at " + TimeStamp +  (char) 13;
 		     System.out.println(process);  
 		}
 		
 		while (true) {
 			try {
 				clientSocket = serverSocket.accept(); // Create a client socket
-				for (int i = 0; i < CoreSimulator; i++) { //for each connection <=amount of threads/cores.
-					if (chatThreads[i] == null) { //space available
-						(chatThreads[i] = new ChatThread(clientSocket, chatThreads)).start(); //give client a thread
-						i = CoreSimulator; 
-					} else {
-						PrintStream outputStream = new PrintStream(clientSocket.getOutputStream());
-						outputStream.println("Server too busy for more users as it would effect performance. Try later.");
-						outputStream.close();
-						clientSocket.close();
-					}
-				}
-			} catch (IOException e) {
+				  int cores = 0;
+			        for (cores = 0; cores < CoreSimulator; cores++) {
+			          if (chatThreads[cores] == null) {
+			            (chatThreads[cores] = new ChatThread(clientSocket, chatThreads)).start();
+			            break; //break out after first empty space. 
+			          }
+			        } if (cores == CoreSimulator) {
+			          PrintStream outputLine = new PrintStream(clientSocket.getOutputStream());
+			          outputLine.println("Server too busy for more users as it would effect performance. Try later.");
+			          outputLine.close();
+			          clientSocket.close();
+			        }
+			}catch (IOException e) {
 				System.out.println(e);
 			}
 		}
@@ -95,11 +95,10 @@ class ChatThread extends Thread {
 
 	private String clientName = null; 
 	private DataInputStream inputStream = null; //input Stream from Client
-	private static BufferedReader inputLine = null; // The input Line
 	private PrintStream outputLine = null; //print output from client
 	private Socket clientSocket = null; //socket 
 	private final ChatThread[] chatThreads; //array of threads
-	
+	private int maxClients; 
 	/**
 	 * constructor 
 	 * @param clientSocket
@@ -108,33 +107,38 @@ class ChatThread extends Thread {
 	public ChatThread(Socket clientSocket, ChatThread[] threads) {
 		this.clientSocket = clientSocket;
 		this.chatThreads = threads;
+		maxClients = threads.length;
 	}
 	/**
 	 * 
 	 */
+	@SuppressWarnings("deprecation")
 	public void run() {
 		ChatThread[] chatThreads = this.chatThreads;
+		int maxClient = this.maxClients;
 
 		try {
 			inputStream = new DataInputStream(clientSocket.getInputStream()); //input Streams for client
-			inputLine = new BufferedReader(new InputStreamReader(inputStream)); //read chat input on server
-			outputLine = new PrintStream(clientSocket.getOutputStream()); //output Streams for client
-			String name = null;
-			while (true && (name == null)) {
-				outputLine.println("Enter name");
-				name = inputStream.readUTF().trim();
-				System.out.println("Client " + name + " connected");
+			outputLine = new PrintStream(clientSocket.getOutputStream()); //output Streams to client
+			String name;
+			while (true) {
+				outputLine.println("Enter client name");
+				name = inputStream.readLine().trim();
+		        System.out.println("Client " + name + " connected");
+		        if (name!=null) {
+		            break;
+		          }
 			}
 
 			synchronized (this) {
 				for (ChatThread client : chatThreads) {
 					if (client != null && client == this) {
-						clientName = name;
+						clientName = name; 
 					}
 				}
 			}
 			while (true) { //enter chat room
-				String line = inputLine.readLine();
+				String line = inputStream.readLine();
 				if (line.startsWith("/quit")) {
 					break; //would use return but need to end the clients connection
 				}
@@ -159,25 +163,26 @@ class ChatThread extends Thread {
 						}
 					} else { //file
 						synchronized (this) {
-							for (ChatThread client : chatThreads) {
-								if (client != null && client != this && client.clientName != null
-										&& client.clientName.equals(words[words.length - 1])) {
+							for (int i = 0 ; i < maxClients; i++) {
+								if (chatThreads[i] != null && chatThreads[i] != this 
+										&& chatThreads[i].clientName != null
+										&& chatThreads[i].clientName.equals(words[words.length - 1])) {
 									
 									int index = words[2].lastIndexOf("/");
 									String filename = words[2].substring(index + 1);
 									FileInputStream input = new FileInputStream(words[2]);
-									String target = "../"+ client.clientName + "/"+ filename;
+									String target = "../"+ chatThreads[i].clientName + "/"+ filename;
 									FileOutputStream output = new FileOutputStream(target);
+									
 									byte[] buffer = new byte[1024];
 									int length;
-									
 									while ((length = input.read(buffer)) > 0) {
 										output.write(buffer, 0, length); // Copy the bits from input stream to output stream
 									}
 									output.flush();
 									input.close();
 									output.close();
-									client.outputLine.println("File " + filename + " was sent by " + name);
+									chatThreads[i].outputLine.println("File " + filename + " was sent by " + name);
 								}
 							}
 							System.out.println(name + " private file to " + words[words.length - 1]);
@@ -204,9 +209,9 @@ class ChatThread extends Thread {
 									FileInputStream input = new FileInputStream(words[2]);
 									String target = "../" +  client.clientName + "/" + filename;
 									FileOutputStream output = new FileOutputStream(target);
+									
 									byte[] buffer = new byte[1024];
 									int length;
-									
 									while ((length = input.read(buffer)) > 0) {
 										output.write(buffer, 0, length); // Copy the bits from input stream to output stream
 									}
@@ -219,7 +224,8 @@ class ChatThread extends Thread {
 							System.out.println(name + " public file");
 						}
 					}
-				} else {
+				} 
+				else {
 					String[] words = line.split("\\s", 0);
 					if (words.length > 1 && words[1].equals("message")) {
 						if (!words[words.length - 1].isEmpty()) {
@@ -235,7 +241,7 @@ class ChatThread extends Thread {
 										client.outputLine.println("@" + name + ": " + msg);
 									}
 								}
-								System.out.println(name + " blockcast message excluding " + words[words.length - 1]);
+								System.out.println(name + "message excluding " + words[words.length - 1]);
 							}
 						}
 					} else {
@@ -248,6 +254,7 @@ class ChatThread extends Thread {
 									FileInputStream input = new FileInputStream(words[2]);
 									String target = "../" + client.clientName + "/" + filename;
 									FileOutputStream output = new FileOutputStream(target);
+									
 									byte[] buffer = new byte[1024];
 									int length;
 									while ((length = input.read(buffer)) > 0) {
@@ -258,7 +265,7 @@ class ChatThread extends Thread {
 									client.outputLine.println("File " + filename + " was sent by " + name);
 								}
 							}
-							System.out.println(name + " blockcast file excluding " + words[words.length - 1]);
+							System.out.println(name + "file excluding " + words[words.length - 1]);
 						}
 					}
 				}
