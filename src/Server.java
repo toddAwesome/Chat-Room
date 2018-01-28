@@ -22,7 +22,7 @@ public class Server {
 	 * The AWS free server only has 1 Core 
 	 * to simulate multiple (AS I am a broke college student)
 	 * each thread is assigned to run on an array position "specific core" 
-	 * though it will not enhance performance necessarily. Chat-Room\AWS server properties.PNG
+	 * though it will not enhance performance necessarily. Chat-Room\img\AWS server properties.PNG
 	 */
 	private static final int CoreSimulator = 4; //pretend there is 4 cores
 	private static final ChatThread[] chatThreads = new ChatThread[CoreSimulator];
@@ -115,8 +115,6 @@ class ChatThread extends Thread {
 	@SuppressWarnings("deprecation")
 	public void run() {
 		ChatThread[] chatThreads = this.chatThreads;
-		int maxClient = this.maxClients;
-
 		try {
 			inputStream = new DataInputStream(clientSocket.getInputStream()); //input Streams for client
 			outputLine = new PrintStream(clientSocket.getOutputStream()); //output Streams to client
