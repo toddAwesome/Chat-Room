@@ -1,10 +1,12 @@
-import java.io.IOException;
-import java.io.PrintStream;
-import java.net.ServerSocket;
-import java.net.Socket;
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+import java.net.ServerSocket;
+import java.net.Socket;
 
 /**
  *
@@ -22,10 +24,10 @@ public class Server {
 	 * The AWS free server only has 1 Core 
 	 * to simulate multiple (AS I am a broke college student)
 	 * each thread is assigned to run on an array position "specific core" 
-	 * though it will not enhance performance necessarily. 
+	 * though it will not enhance performance necessarily. Chat-Room\AWS server properties.PNG
 	 */
 	private static final int CoreSimulator = 4;
-	private static final ChatThreads[] threads = new ChatThreads[CoreSimulator]; // currently 4 threads
+	private static final ChatThread[] chatThreads = new ChatThread[CoreSimulator]; // currently 4 threads
 
 	/**
 	 * main method for AWS threaded Server
@@ -33,31 +35,37 @@ public class Server {
 	 * @param args
 	 */
 	public static void main(String args[]) {
+		String TimeStamp;
 
-		int portNumber = 2222; // The default port number.
+		int port = 1337; 
 		if (args.length < 1) {
-			System.out.println("Using TCP port number=" + portNumber);
+			System.out.println("Using TCP port number=" + port);
 		} else {
-			portNumber = Integer.valueOf(args[0]).intValue();
+			port = Integer.valueOf(args[0]).intValue();
 		}
 		try {
-			serverSocket = new ServerSocket(portNumber); // Open a server socket on the portNumber
+			serverSocket = new ServerSocket(port); // Open a server socket on the portNumber
+		     TimeStamp = new java.util.Date().toString();
+		     String process = "opening Socket" + port + " at " + TimeStamp +  (char) 13;
+		     System.out.println(process);  
 		} catch (IOException e) {
 			System.out.println(e); //need to select different port
+		     TimeStamp = new java.util.Date().toString();
+		     String process = "need to select different port than" + port + " error at " + TimeStamp +  (char) 13;
+		     System.out.println(process);  
 		}
 		
 		while (true) {
 			try {
 				clientSocket = serverSocket.accept(); // Create a client socket
-				for (int i = 0; i < CoreSimulator; i++) { //for each connection <=10
-					if (threads[i] == null) { //space available
-						(threads[i] = new ChatThreads(clientSocket, threads)).start(); //give client a thread
-						break; 
-				//		i = maxClientsCount; 
+				for (int i = 0; i < CoreSimulator; i++) { //for each connection <=amount of threads/cores.
+					if (chatThreads[i] == null) { //space available
+						(chatThreads[i] = new ChatThread(clientSocket, chatThreads)).start(); //give client a thread
+						i = CoreSimulator; 
 					} else {
-						PrintStream os = new PrintStream(clientSocket.getOutputStream());
-						os.println("Server too busy. Try later.");
-						os.close();
+						PrintStream outputStream = new PrintStream(clientSocket.getOutputStream());
+						outputStream.println("Server too busy for more users as it would effect performance. Try later.");
+						outputStream.close();
 						clientSocket.close();
 					}
 				}
@@ -70,7 +78,7 @@ public class Server {
 
 
 /**
- * The chat clients thread. 
+ * The chat/clients thread. 
  * This client thread opens the input and the output streams for a particular client. 
  * From there we perform the following functionality.  
  * 1. ask the client's name 
@@ -83,236 +91,171 @@ public class Server {
  * @author Todd Robbins
  *
  */
-class ChatThreads extends Thread {
+class ChatThread extends Thread {
 
 	private String clientName = null; 
 	private DataInputStream inputStream = null; //input Stream from Client
+	private static BufferedReader inputLine = null; // The input Line
 	private PrintStream outputLine = null; //print output from client
 	private Socket clientSocket = null; //socket 
-	private final ChatThreads[] threads; //our thread
-	private int maxClientsCount; //4
+	private final ChatThread[] chatThreads; //array of threads
 	
 	/**
 	 * constructor 
 	 * @param clientSocket
 	 * @param threads
 	 */
-	public ChatThreads(Socket clientSocket, ChatThreads[] threads) {
+	public ChatThread(Socket clientSocket, ChatThread[] threads) {
 		this.clientSocket = clientSocket;
-		this.threads = threads;
-		maxClientsCount = threads.length;
+		this.chatThreads = threads;
 	}
 	/**
 	 * 
 	 */
-	@SuppressWarnings("deprecation")
 	public void run() {
-		int maxClientsCount = this.maxClientsCount;
-		ChatThreads[] threads = this.threads;
+		ChatThread[] chatThreads = this.chatThreads;
 
 		try {
-			/*
-			 * Create input and output streams for this client.
-			 */
-			inputStream = new DataInputStream(clientSocket.getInputStream());
-			outputLine = new PrintStream(clientSocket.getOutputStream());
-			String name;
-			while (true) {
+			inputStream = new DataInputStream(clientSocket.getInputStream()); //input Streams for client
+			inputLine = new BufferedReader(new InputStreamReader(System.in)); //read chat input on server
+			outputLine = new PrintStream(clientSocket.getOutputStream()); //output Streams for client
+			String name = null;
+			while (true && (name == null)) {
 				outputLine.println("Enter name");
 				name = inputStream.readUTF().trim();
 				System.out.println("Client " + name + " connected");
-				if (name != null) {
-					break;
-				}
 			}
 
 			synchronized (this) {
-				for (int i = 0; i < maxClientsCount; i++) {
-					if (threads[i] != null && threads[i] == this) {
+				for (ChatThread client : chatThreads) {
+					if (client != null && client == this) {
 						clientName = name;
-						break;
 					}
 				}
 			}
-			/* Start the conversation. */
-			while (true) {
-				String line = inputStream.readLine();
+			while (true) { //enter chat room
+				String line = inputLine.readLine();
 				if (line.startsWith("/quit")) {
-					break;
+					break; //would use return but need to end the clients connection
 				}
-				/* If the message is private sent it to the given client. */
-				if (line.startsWith("unicast")) {
+				if (line.startsWith("private")) { //private message
 					String[] words = line.split("\\s", 0);
-					if (words.length > 1 && words[1].equals("message")) {
-						// words[1] = words[1].trim();
+					if (words.length > 1 && words[1].equals("message")) { //message
 						if (!words[words.length - 1].isEmpty()) {
 							synchronized (this) {
 								String msg = "";
-								for (int j = 2; j < words.length - 1; j++) {
-									msg = msg + words[j];
+								for (int i = 2; i < words.length - 1; i++) { //create message
+									msg = msg + words[i];
 								}
-								for (int i = 0; i < maxClientsCount; i++) {
-									if (threads[i] != null
-											&& threads[i] != this
-											&& threads[i].clientName != null
-											&& threads[i].clientName
+								for (ChatThread client : chatThreads) { //send to desired user
+ 									if (client != null && client != this && client.clientName != null && client.clientName
 													.equals(words[words.length - 1])) {
 
-										threads[i].outputLine.println("@" + name + ": "
-												+ msg);
-										/*
-										 * Echo this message to let the client
-										 * know the private message was sent.
-										 */
-										// this.os.println(">" + name + "> " +
-										// words[1]);
-										break;
+										client.outputLine.println("@" + name + ": " + msg);
 									}
 								}
-								System.out.println(name
-										+ " unicast message to "
-										+ words[words.length - 1]);
+								System.out.println(name + " private message to " + words[words.length - 1]); //display message
 							}
 						}
-					} else {
+					} else { //file
 						synchronized (this) {
-							for (int i = 0; i < maxClientsCount; i++) {
-								if (threads[i] != null
-										&& threads[i] != this
-										&& threads[i].clientName != null
-										&& threads[i].clientName
-												.equals(words[words.length - 1])) {
+							for (ChatThread client : chatThreads) {
+								if (client != null && client != this && client.clientName != null
+										&& client.clientName.equals(words[words.length - 1])) {
+									
 									int index = words[2].lastIndexOf("/");
-									String filename = words[2]
-											.substring(index + 1);
-									FileInputStream in = new FileInputStream(
-											words[2]);
-									String target = "../"
-											+ threads[i].clientName + "/"
-											+ filename;
-									FileOutputStream out = new FileOutputStream(
-											target);
-
-									// Copy the bits from instream to outstream
-									byte[] buf = new byte[1024];
-									int len;
-									while ((len = in.read(buf)) > 0) {
-										out.write(buf, 0, len);
+									String filename = words[2].substring(index + 1);
+									FileInputStream input = new FileInputStream(words[2]);
+									String target = "../"+ client.clientName + "/"+ filename;
+									FileOutputStream output = new FileOutputStream(target);
+									byte[] buffer = new byte[1024];
+									int length;
+									
+									while ((length = input.read(buffer)) > 0) {
+										output.write(buffer, 0, length); // Copy the bits from input stream to output stream
 									}
-									out.flush();
-									in.close();
-									out.close();
-									threads[i].outputLine.println("File " + filename
-											+ " was sent by " + name);
+									output.flush();
+									input.close();
+									output.close();
+									client.outputLine.println("File " + filename + " was sent by " + name);
 								}
 							}
-							System.out.println(name + " unicast file to "
-									+ words[words.length - 1]);
+							System.out.println(name + " private file to " + words[words.length - 1]);
 						}
 					}
-				} else if (line.startsWith("broadcast")) {
-					/* The message is public, broadcast it to all other clients. */
+				} else if (line.startsWith("public")) { //show all clients
 					String[] words = line.split("\\s", 3);
-					if (words.length > 1 && words[1].equals("message")
-							&& words[2] != null) {
+					if (words.length > 1 && words[1].equals("message") && words[2] != null) { //message
 						synchronized (this) {
-							for (int i = 0; i < maxClientsCount; i++) {
-								if (threads[i] != null
-										&& threads[i].clientName != null
-										&& threads[i] != this) {
-									threads[i].outputLine.println("@" + name + ": "
-											+ words[2]);
+							for (ChatThread client : chatThreads) {
+								if (client != null && client.clientName != null && client != this) {
+									client.outputLine.println("@" + name + ": " + words[2]);
 								}
 							}
-							System.out.println(name + " broadcasted message");
+							System.out.println(name + " public message");
 						}
 
-					} else {
+					} else { //file
 						synchronized (this) {
-							for (int i = 0; i < maxClientsCount; i++) {
-								if (threads[i] != null
-										&& threads[i].clientName != null
-										&& threads[i] != this) {
+							for (ChatThread client : chatThreads) {
+								if (client != null && client.clientName != null && client!= this) {
 									int index = words[2].lastIndexOf("/");
-									String filename = words[2]
-											.substring(index + 1);
-									FileInputStream in = new FileInputStream(
-											words[2]);
-									String target = "../"
-											+ threads[i].clientName + "/"
-											+ filename;
-									FileOutputStream out = new FileOutputStream(
-											target);
-
-									// Copy the bits from instream to outstream
-									byte[] buf = new byte[1024];
-									int len;
-									while ((len = in.read(buf)) > 0) {
-										out.write(buf, 0, len);
+									String filename = words[2].substring(index + 1);
+									FileInputStream input = new FileInputStream(words[2]);
+									String target = "../" +  client.clientName + "/" + filename;
+									FileOutputStream output = new FileOutputStream(target);
+									byte[] buffer = new byte[1024];
+									int length;
+									
+									while ((length = input.read(buffer)) > 0) {
+										output.write(buffer, 0, length); // Copy the bits from input stream to output stream
 									}
-									out.flush();
-									in.close();
-									out.close();
-									threads[i].outputLine.println("File " + filename
-											+ " was sent by " + name);
+									output.flush();
+									input.close();
+									output.close();
+									client.outputLine.println("File " + filename + " was sent by " + name);
 								}
 							}
-							System.out.println(name + " broadcasted file");
+							System.out.println(name + " public file");
 						}
 					}
 				} else {
 					String[] words = line.split("\\s", 0);
 					if (words.length > 1 && words[1].equals("message")) {
-						// words[1] = words[1].trim();
 						if (!words[words.length - 1].isEmpty()) {
 							synchronized (this) {
 								String msg = "";
-								for (int j = 2; j < words.length - 1; j++) {
-									msg = msg + " " + words[j];
+								for (int i = 2; i < words.length - 1; i++) {
+									msg = msg + " " + words[i];
 								}
-								for (int i = 0; i < maxClientsCount; i++) {
-									if (threads[i] != null
-											&& threads[i] != this
-											&& threads[i].clientName != null
-											&& !(threads[i].clientName
-													.equals(words[words.length - 1]))) {
+								for (ChatThread client : chatThreads) {
+									if (client != null && client != this && client.clientName != null
+											&& !(client.clientName.equals(words[words.length - 1]))) {
 
-										threads[i].outputLine.println("@" + name + ": "
-												+ msg);
-										/*
-										 * Echo this message to let the client
-										 * know the private message was sent.
-										 */
-										break;
+										client.outputLine.println("@" + name + ": " + msg);
 									}
 								}
-								System.out.println(name
-										+ " blockcast message excluding "
-										+ words[words.length - 1]);
+								System.out.println(name + " blockcast message excluding " + words[words.length - 1]);
 							}
 						}
 					} else {
 						synchronized (this) {
-							for (int i = 0; i < maxClientsCount; i++) {
-								if (threads[i] != null && threads[i] != this && threads[i].clientName != null 
-										&& !(threads[i].clientName.equals(words[words.length - 1]))) {
+							for (ChatThread client : chatThreads) {
+								if (client != null && client != this && client.clientName != null 
+										&& !(client.clientName.equals(words[words.length - 1]))) {
 									int index = words[2].lastIndexOf("/");
 									String filename = words[2].substring(index + 1);
-									FileInputStream in = new FileInputStream(
-											words[2]);
-									String target = "../" + threads[i].clientName + "/" + filename;
-									FileOutputStream out = new FileOutputStream(
-											target);
-
-									// Copy the bits from instream to outstream
-									byte[] buf = new byte[1024];
-									int len;
-									while ((len = in.read(buf)) > 0) {
-										out.write(buf, 0, len);
+									FileInputStream input = new FileInputStream(words[2]);
+									String target = "../" + client.clientName + "/" + filename;
+									FileOutputStream output = new FileOutputStream(target);
+									byte[] buffer = new byte[1024];
+									int length;
+									while ((length = input.read(buffer)) > 0) {
+										output.write(buffer, 0, length); // Copy the bits from instream to outstream
 									}
-									in.close();
-									out.close();
-									threads[i].outputLine.println("File " + filename + " was sent by " + name);
+									input.close();
+									output.close();
+									client.outputLine.println("File " + filename + " was sent by " + name);
 								}
 							}
 							System.out.println(name + " blockcast file excluding " + words[words.length - 1]);
@@ -321,9 +264,9 @@ class ChatThreads extends Thread {
 				}
 			}
 			synchronized (this) {
-				for (int i = 0; i < maxClientsCount; i++) {
-					if (threads[i] != null && threads[i] != this && threads[i].clientName != null) {
-						threads[i].outputLine.println("*** The user " + name + " is leaving the chat room !!! ***");
+				for (ChatThread client : chatThreads) {
+					if (client != null && client != this && client.clientName != null) {
+						client.outputLine.println("*** The user " + name + " is leaving the chat room !!! ***");
 					}
 				}
 			}
@@ -334,9 +277,9 @@ class ChatThreads extends Thread {
 			 * client could be accepted by the server.
 			 */
 			synchronized (this) {
-				for (int i = 0; i < maxClientsCount; i++) {
-					if (threads[i] == this) {
-						threads[i] = null;
+				for (ChatThread client : chatThreads) {
+					if (client == this) {
+						client = null;
 					}
 				}
 			}

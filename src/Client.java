@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.Socket;
-import java.net.UnknownHostException;
 
 /**
  * 
@@ -20,39 +19,42 @@ public class Client implements Runnable {
 	private static DataOutputStream outputStream = null; // The output Stream
 	private static boolean closed = false;
 	public static String name;
+    private static final int PORT = 1337;
 
 	/**
 	 * main method to run the client connection to AWS server. 
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		int portNumber; // The default port.
-		String host = "localhost"; // The default host.
-		name = args[0]; //server Address
-		if (args.length < 2) { //
-			portNumber = 2222;
-		} else {
-			portNumber = Integer.valueOf(args[1]).intValue();
+		int port; 
+		String TimeStamp;
+		if (args.length == 0) { // check to see if the String array is empty
+			System.out.println("There were no commandline arguments passed!");
+			System.exit(0);
 		}
+		name = args[0];
+	    if (args.length < 2) {
+	    	port = PORT;
+	    } else {
+	      name = args[0]; //server Address
+	      port = Integer.valueOf(args[1]).intValue();
+	    }
 
 		try {
-			clientSocket = new Socket(host, portNumber); // Open a socket on a given host and port.
+			clientSocket = new Socket(name, port); // Open a socket on a given address and port.
+		     TimeStamp = new java.util.Date().toString();
+		     String process = "Calling the Socket Server on port " + port + " at " + TimeStamp +  (char) 13;
+		     System.out.println(process);  
 			inputLine = new BufferedReader(new InputStreamReader(System.in)); //read chat input on server
 			outputLine = new PrintStream(clientSocket.getOutputStream()); //print text output to user
 			inputStream = new DataInputStream(clientSocket.getInputStream()); //receive server data
 			outputStream = new DataOutputStream(clientSocket.getOutputStream()); //send server data
 
-		} catch (UnknownHostException e) {
-			System.out.println("Don't know about host " + host);
 		} catch (IOException e) {
-			System.out.println("Couldn't get I/O for the connection to the host " + host);
+			TimeStamp = new java.util.Date().toString();
+			System.out.println("Couldn't get I/O for the connection" + name + "at" + TimeStamp +  (char) 13);
 		}
-
-		/*
-		 * If everything's initialized, then we can write some data to
-		 * the socket we have opened a connection to on the port portNumber.
-		 */
-		if (clientSocket != null && outputLine != null && inputStream != null) { //socket is open, text is wriiten, and input still exists
+		if (clientSocket != null && outputLine != null && inputStream != null) { //socket is open, text is written, and input still exists
 			try {
 				new Thread(new Client()).start(); // Create a thread to read from the server/Chat Room.
 				while (!closed) {
@@ -77,11 +79,10 @@ public class Client implements Runnable {
 	 * In this case we end connection. 
 	 * 
 	 */
-	@SuppressWarnings("deprecation")
 	public void run() {
 		String responseLine;
 		try { 
-			while ((responseLine = inputStream.readLine()) != null) {
+			while ((responseLine = inputLine.readLine()) != null) {
 
 				if (responseLine.equals("Enter name")) {
 					outputLine.println(name);
